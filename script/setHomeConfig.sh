@@ -4,7 +4,7 @@ symbolicFileArr=".bashrc .bash_profile .inputrc .vim .vimrc .tmux.conf .gitconfi
 
 for file in ${symbolicFileArr}; do
   /bin/rm -rf ~/${file}
-  /bin/ln -s ~/config_centos_v2/${file} ~/${file}
+  /bin/ln -s ~/ubun-bash/${file} ~/${file}
 done
 
 /bin/rm -rf ~/.vimbak
