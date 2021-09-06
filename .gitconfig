@@ -1,0 +1,41 @@
+[user]
+	name = YourFirstName YourLastName
+	email = me@example.com
+[core]
+	editor = vim
+	commentchar = "#"
+[merge]
+	tool = vimdiff3
+	conflictstyle = diff3
+[color]
+	diff = auto
+	status = auto
+	branch = auto
+[alias]
+	st = status
+	ci = commit
+	br = branch
+	co = checkout
+	show-n-lines = show --ignore-all-space --no-prefix -U100
+	diff-n-lines = diff --ignore-all-space --no-prefix -U100
+	# Usage:
+	# git list-files HEAD~0
+	# git list-files <commit-id>
+	list-files = "!f() { git diff-tree --no-commit-id --name-only -r $1; }; f"
+	# git dry-merge <from_branch> <to_branch>
+	# NOTE: Use "git rebase --strategy-option=ignore-all-space <from_branch>" when there are conflicts.
+	dry-merge = "!f() { git merge-tree $(git merge-base $2 $1) $2 $1; }; f"
+	tree = log --graph --decorate --pretty=oneline --abbrev-commit --all
+	own-tree = log --graph --decorate --pretty=oneline --abbrev-commit
+	# NOTE: --author-date-order, --topo-order
+	# NOTE: The author date on a commit is preserved on merge, rebase, cherry-pick etc. But the commit date is changed.
+	# NOTE: https://stackoverflow.com/questions/11856983/why-git-authordate-is-different-from-commitdate
+	log-commit-date = log --date-order --date=iso --pretty=format:'%cd %h by %cn, %s'
+	remove-local-branch = "!f() { git branch -d $1; }; f"
+	remove-origin-branch = "!f() { git push --delete origin $1; }; f"
+	remove-local-tag = "!f() { git tag --delete $1; }; f"
+	remove-origin-tag = "!f() { git push --delete origin $1; }; f"
+[push]
+	default = simple
+[pull]
+	ff = only

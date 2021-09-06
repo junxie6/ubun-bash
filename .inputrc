@@ -1,0 +1,36 @@
+### enable filename tab auto-completion
+set show-all-if-ambiguous on
+set show-all-if-unmodified on
+
+### if you don't want case-sensitivity
+#set completion-ignore-case on
+
+### bash history completion to complete what's already on the line
+### arrow up
+"\e[A": history-search-backward
+### arrow down
+"\e[B": history-search-forward
+
+### Enable the following when home and end keys are not working
+###
+### Note: If you want to verify which code is sent by PuTTY to your terminal when you press a key or a combination of keys, you just have to issue a Ctrl+V and then press on the desired key.
+###
+### Note: The number one cause of broken keys is overriding the TERM environment variable to
+### something that conflicts with your shell. All modern terminals are smart enough to set their own TERM variable,
+### so before you go delving into program configurations ensure that you are not incorrectly overriding it
+### (for example, in your ~/.bashrc). Again, do not set TERM manually - let the terminal do it.
+###
+### Note: Also, check out "cat /etc/inputrc" for some examples.
+###
+### Reference:
+### https://wiki.archlinux.org/index.php/Home_and_End_keys_not_working
+### https://unix.stackexchange.com/questions/20298/home-key-not-working-in-terminal
+### https://superuser.com/questions/94436/how-to-configure-putty-so-that-home-end-pgup-pgdn-work-properly-in-bash
+#"\e[1~": beginning-of-line
+#"\e[4~": end-of-line
+#"\e[7~": beginning-of-line
+#"\e[8~": end-of-line
+#"\eOH": beginning-of-line
+#"\eOF": end-of-line
+#"\e[H": beginning-of-line
+#"\e[F": end-of-line

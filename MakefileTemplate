@@ -1,0 +1,160 @@
+SHELL = /bin/bash -o pipefail
+
+#set -o nounset    # error when referencing undefined variable
+#set -o errexit    # exit when command fails
+
+include .env
+
+# Things to be aware of when writing Makefile:
+# - An extra dollar sign is required
+# - The tilde (~) shortcut will not work. Use $HOME instead
+
+# What is the difference between the GNU Makefile variable assignments =, ?=, := and +=?
+#
+# Lazy Set - Values within it are recursively expanded when the variable is used, not when it's declared:
+# VARIABLE = value
+#
+# Immediate Set - Values within it are expanded at declaration time:
+# VARIABLE := value
+#
+# Set If Absent - Setting of a variable only if it doesn't have a value:
+# VARIABLE ?= value
+#
+# Append - Appending the supplied value to the existing value (or setting to that value if the variable didn't exist)
+# VARIABLE += value
+# NOTE: https://stackoverflow.com/questions/448910/what-is-the-difference-between-the-gnu-makefile-variable-assignments-a
+
+# When it is time to consider a .PHONY target, make will run its recipe unconditionally,
+# regardless of whether a file with that name exists or what its last-modification time is.
+# - All phony targets should be declared by making them prerequisites of .PHONY.
+# - add each phony target as a prerequisite of .PHONY immediately before the target declaration,
+#   rather than listing all the phony targets in a single place.
+# - No file targets should be prerequisites of .PHONY.
+# - phony targets should not be prerequisites of file targets.
+# NOTE: https://stackoverflow.com/questions/2145590/what-is-the-purpose-of-phony-in-a-makefile
+# NOTE: https://unix.stackexchange.com/questions/217295/phony-all-rules-in-gnu-make-file
+# NOTE: http://clarkgrubb.com/makefile-style-guide#phony-targets
+# NOTE: https://stackoverflow.com/questions/4156382/is-it-possible-to-have-multiple-phony-targets-in-a-gnu-makefile
+#.PHONY: install uninstall clean
+
+APP_NAME = gin-example
+
+BIN_DIR = $(CURDIR)/bin
+APP = $(BIN_DIR)/$(APP_NAME)
+
+LOG_DIR = $(CURDIR)/log
+LOG_FILE = $(LOG_DIR)/$(APP_NAME).log
+LOG_FILE_BUILD = $(LOG_DIR)/build-$(APP_NAME).log
+LOG_CONFIG = $(CURDIR)/logrotate.conf
+LOG_STATUS = $(LOG_DIR)/status
+
+DOCKER_IMAGE_DIR = $(CURDIR)/docker-image
+
+REFLEX = $(BIN_DIR)/reflex
+REFLEX_DIR = $(CURDIR)/reflex
+
+PID = ./app.pid
+
+GO_FILES1 := $(wildcard *.go)
+GO_FILES2 := $(shell /usr/bin/find . -type d -and \( -name .git -or -name .svn -or -name vendor -or -name node_modules \) -prune -or -type f -name "*.go" -exec ls -- '{}' +)
+
+# check we have a couple of dependencies
+.PHONY: dependencies
+dependencies:
+	@cd $(CURDIR) && command -v $(REFLEX) >/dev/null 2>&1 || { printf >&2 $(REFLEX)" is not installed, please run: make reflex\n"; exit 1; }
+	cd $(CURDIR) && mkdir -p $(BIN_DIR)
+	cd $(CURDIR) && mkdir -p $(LOG_DIR)
+
+# default targets to run when only running `make`
+.PHONY: default
+default: dependencies
+
+# TODO: why 2>/dev/null ??
+.PHONY: kill
+kill:
+	echo "@@@@@ Doing kill"
+	kill `cat $(PID)` 2>/dev/null || true
+
+# run formatting tool and build
+.PHONY: go-build
+go-build: dependencies
+	cd $(CURDIR) && logrotate -v --state $(LOG_STATUS) $(LOG_CONFIG)
+	cd $(CURDIR) && go mod vendor -v 2>&1 | tee --append $(LOG_FILE_BUILD)
+	cd $(CURDIR) && go build -o $(APP) -v -x -mod vendor 2>&1 | tee --append $(LOG_FILE_BUILD)
+
+.PHONY: go-run
+go-run:
+	cd $(CURDIR) && go mod vendor -v
+	cd $(CURDIR) && go run -v -mod vendor -race main.go
+
+# NOTE: -count 1 to disable go test cache.
+.PHONY: go-test
+go-test:
+	cd $(CURDIR) && go test -v -count 1 -mod vendor -race $(APP_NAME)/...
+
+.PHONY: go-test-cover
+go-test-cover:
+	cd $(CURDIR) && go test -v -count 1 -cover -mod vendor $(APP_NAME)/...
+
+.PHONY: go-test-util
+go-test-util:
+	cd $(CURDIR) && go test -v -count 1 -mod vendor -race $(APP_NAME)/core/util -args $(args)
+
+.PHONY: go-tidy
+go-tidy:
+	cd $(CURDIR) && go mod tidy -v
+
+.PHONY: go-clean
+go-clean:
+	cd $(CURDIR) && go clean -i -x -modcache
+
+.PHONY: start
+start: go-build
+	cd $(CURDIR) && logrotate -v --state $(LOG_STATUS) $(LOG_CONFIG)
+	cd $(CURDIR) && $(APP) 2>&1 | tee --append $(LOG_FILE)
+
+.PHONY: run
+run:
+	cd $(CURDIR) && bin/reflex --start-service -d none -r '\.go$$' -R '^vendor/' -R '^node_modules/' -R '^cliapp/' -- make start
+
+.PHONY: install-go
+install-go:
+	sudo -- sh -c 'rm -rf /usr/local/go \
+		&& curl -L "https://dl.google.com/go/go1.12.7.linux-amd64.tar.gz" -o go.tar.gz \
+		&& tar -zxvf go.tar.gz -C /usr/local \
+		&& rm -f go.tar.gz'
+
+.PHONY: go-test-problem
+go-test-problem:
+	@test -n "$(PROBLEM)" || (echo ">> PROBLEM flag is not set"; exit 1)
+	cd $(CURDIR) && go test -v -count 1 -mod vendor -race -run="$(PROBLEM)" $(APP_NAME)/problem
+
+# start
+.PHONY: NotYetstart
+NotYetstart:
+	echo "@@@@@ Doing start"
+	rm -f $(PID)
+	$(APP) 2>&1 & echo $$! > $(PID)
+
+# reflex
+.PHONY: reflex
+reflex:
+	cd $(CURDIR) && mkdir -p $(BIN_DIR)
+	cd $(CURDIR) && git clone https://github.com/cespare/reflex.git --depth 1
+	cd $(REFLEX_DIR) && go mod vendor -v
+	cd $(REFLEX_DIR) && go build -o $(REFLEX) -v -x -mod vendor
+	rm -rf $(REFLEX_DIR)
+
+.PHONY: rebuild-redis
+rebuild-redis:
+	cd $(DOCKER_IMAGE_DIR)/redis && docker build --network=host -t gin-example/redis:5.0.3 .
+	cd $(DOCKER_IMAGE_DIR)/redis && docker-compose rm -sf "redis" && docker-compose up -d --no-deps --build "redis"
+
+
+.PHONY: ng-g-c
+ng-g-c: check-env
+	@test -n "$(module)" || (echo ">> module flag is not set. e.g. module=my-module"; exit 1)
+	@test -n "$(name)" || (echo ">> name flag is not set. e.g. name=my-component"; exit 1)
+	cd $(ANGULAR_SRC_DIR) \
+	&& DIRNAME=`dirname $(name)` BASENAME=`basename $(name)` \
+	&& ng generate component $(module)/$${DIRNAME}/$(module)-$${BASENAME} --module $(module) --lint-fix
